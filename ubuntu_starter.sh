@@ -143,8 +143,8 @@ setup_ohmyzsh() {
     rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
 
     # Install Oh My Zsh
-    su - "$user" -c "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash --unattended"
-
+    su - "$user" -c "sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\" --unattended"
+    
     # Clone plugins and themes
     su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions" || { echo "Failed to clone zsh-autosuggestions"; exit 1; }
     su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting" || { echo "Failed to clone zsh-syntax-highlighting"; exit 1; }
