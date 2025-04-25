@@ -152,12 +152,32 @@ setup_ohmyzsh() {
     su - "$user" -c "git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete" || { echo "Failed to clone zsh-autocomplete"; exit 1; }
     su - "$user" -c "git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k" || { echo "Failed to clone powerlevel10k"; exit 1; }
 
-    # Generate .zshrc using the default template from Oh My Zsh
-    su - "$user" -c "cp $user_home/.oh-my-zsh/templates/zshrc.zsh-template $user_home/.zshrc"
-    su - "$user" -c "sed -i 's|^ZSH_THEME=.*|ZSH_THEME=\"powerlevel10k/powerlevel10k\"|' $user_home/.zshrc"
+    # Generate .zshrc with custom configuration
+    cat <<EOM > "$user_home/.zshrc"
+export LANG='en_US.UTF-8'
+export LANGUAGE='en_US:en'
+export LC_ALL='en_US.UTF-8'
+[ -z "\$TERM" ] && export TERM=xterm
 
-    # Add plugins to .zshrc
-    su - "$user" -c "sed -i 's|^plugins=.*|plugins=($PLUGINS)|' $user_home/.zshrc"
+# Zsh/Oh-my-Zsh Configuration
+export ZSH="$user_home/.oh-my-zsh"
+
+ZSH_THEME="powerlevel10k/powerlevel10k"
+plugins=($PLUGINS)
+
+# Custom left and right prompts
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
+
+# Function to display the IP address in the right prompt
+zsh_ip_address() {
+    echo -n \$(hostname -I | awk '{print \$1}')
+}
+POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
+
+source \$ZSH/oh-my-zsh.sh
+EOM
 
     # Set ownership and default shell
     chown -R "$user:$user" "$user_home/.oh-my-zsh" "$user_home/.zshrc"
