@@ -32,6 +32,19 @@ install_dependencies() {
     apt-get install -y git curl zsh sudo ca-certificates gnupg lsb-release samba ufw wsdd
 }
 
+setup_tailscale() {
+    log "Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh || { echo "Tailscale installation failed"; exit 1; }
+
+    log "Enabling and starting Tailscale service..."
+    systemctl enable --now tailscaled || { echo "Failed to enable/start Tailscale service"; exit 1; }
+
+    log "Configuring Tailscale..."
+    tailscale up --hostname="$(hostname)" --accept-routes --ssh --auth-key="$TAILSCALE_KEY" || { echo "Tailscale configuration failed"; exit 1; }
+
+    log "Tailscale setup completed successfully."
+}
+
 setup_user_environment() {
     local user="$1"
     local user_home="$2"
