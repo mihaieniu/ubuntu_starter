@@ -11,13 +11,13 @@ sudo apt update && sudo apt upgrade -y && sudo apt install -y curl
 ## Usage
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "<root_ssh_key>" "<tailscale_auth_key>" "<samba_network>" "<git_private_key>" "<new_user>" "<new_password>"
+curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "<root_ssh_key>" "<tailscale_auth_key>" "<samba_network>" "<git_private_key>" "<new_user>" "<new_password>" <setup_samba>
 ```
 
 Example:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "ssh-ed25519 key" "tskey-auth-key" "192.168.100.0/24" "PRIVATE_KEY_CONTENT" "user" "passwd"
+curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "ssh-ed25519 key" "tskey-auth-key" "192.168.100.0/24" "PRIVATE_KEY_CONTENT" "user" "passwd" no
 ```
 
 ## Arguments

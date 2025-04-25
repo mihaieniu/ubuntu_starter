@@ -8,14 +8,15 @@ SAMBA_NETWORK="$3"
 GIT_PRIVATE_KEY="$4"
 NEW_USER="$5"
 NEW_PASS="$6"
+SETUP_SAMBA="$7"
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root"
     exit 1
 fi
 
-if [ -z "$ROOT_SSH_KEY" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ] || [ -z "$GIT_PRIVATE_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ]; then
-    echo "Usage: sudo $0 \"<root_ssh_key>\" <tailscale_key> <samba_network> <git_private_key> <new_username> <new_password>"
+if [ -z "$ROOT_SSH_KEY" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ] || [ -z "$GIT_PRIVATE_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$SETUP_SAMBA" ]; then
+    echo "Usage: sudo $0 \"<root_ssh_key>\" <tailscale_key> <samba_network> <git_private_key> <new_username> <new_password> <setup_samba (yes|no)>"
     exit 1
 fi
 
@@ -114,32 +115,6 @@ EOM
     su - "$user" -c "git config --global commit.gpgsign true"
 }
 
-setup_tailscale() {
-    log "Setting up Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh || { echo "Tailscale installation failed"; exit 1; }
-    systemctl enable --now tailscaled
-    systemctl is-active --quiet tailscaled || { echo "Tailscale service is not running"; exit 1; }
-}
-
-create_new_user() {
-    log "Creating new user $NEW_USER..."
-    useradd -m -s "$(which zsh)" -G sudo "$NEW_USER"
-    echo "$NEW_USER:$NEW_PASS" | chpasswd
-}
-
-setup_docker() {
-    log "Setting up Docker..."
-    apt-get update
-    apt-get install -y ca-certificates curl
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    chmod a+r /etc/apt/keyrings/docker.asc
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    docker run hello-world || { echo "Docker is not configured correctly"; exit 1; }
-}
-
 setup_samba() {
     log "Setting up Samba..."
     mkdir -p /mnt/data /mnt/docker
@@ -190,6 +165,7 @@ EOF
     ufw enable || true
     ufw allow Samba || true
     ufw status
+    apt install -y wsdd || { echo "Failed to install wsdd"; exit 1; }
 }
 
 # Run everything
@@ -197,6 +173,12 @@ install_dependencies
 create_new_user
 setup_tailscale
 setup_docker
-setup_samba
+
+if [ "$SETUP_SAMBA" = "yes" ]; then
+    setup_samba
+else
+    log "Skipping Samba setup as per user request."
+fi
+
 setup_user_environment root /root "$ROOT_SSH_KEY" "$GIT_PRIVATE_KEY"
 setup_user_environment "$NEW_USER" "/home/$NEW_USER" "$ROOT_SSH_KEY" "$GIT_PRIVATE_KEY"
