@@ -97,7 +97,7 @@ echo "      _   _| |__  _   _ _ __ | |_ _   _ "
 echo "     | | | | '_ \| | | | '_ \| __| | | |"
 echo "     | |_| | |_) | |_| | | | | |_| |_| |"
 echo "      \__,_|_.__/ \__,_|_| |_|\__|\__,_|"
-eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key | 2> /dev/null
+eval \$(ssh-agent) > /dev/null 2>&1 && ssh-add ~/.ssh/git_signing_key > /dev/null 2>&1
 
 source \$ZSH/oh-my-zsh.sh
 EOM
