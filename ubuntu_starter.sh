@@ -70,7 +70,7 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=($PLUGINS)
 
 # Custom left and right prompts
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user@hostname dir vcs)
 POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
 
 # Function to display the IP address in the right prompt
@@ -78,8 +78,11 @@ zsh_ip_address() {
     echo -n \$(hostname -I | awk '{print \$1}')
 }
 POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
+
+# Alias to start SSH agent and add Git signing key
+alias start-ssh-agent='eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key'
+alias la='ls -alh --color=auto'
 
 source \$ZSH/oh-my-zsh.sh
 EOM
@@ -91,7 +94,7 @@ EOM
     echo "$private_key" > "$user_home/.ssh/git_signing_key"
     chmod 600 "$user_home/.ssh/git_signing_key"
     chown "$user:$user" "$user_home/.ssh/git_signing_key"
-    su - "$user" -c "eval $(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
+    su - "$user" -c "eval \$(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global user.signingkey $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global commit.gpgsign true"
 }
