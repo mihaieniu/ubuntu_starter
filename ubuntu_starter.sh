@@ -70,7 +70,7 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=($PLUGINS)
 
 # Custom left and right prompts
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user@hostname dir vcs)
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user hostname dir vcs)
 POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
 
 # Function to display the IP address in the right prompt
