@@ -48,10 +48,19 @@ configure_git_signing() {
     local user_home="$1"
     local private_key="$2"
     local user="$3"
+
+    # Create .ssh directory if it doesn't exist
     mkdir -p "$user_home/.ssh"
+
+    # Save the private key
     echo "$private_key" > "$user_home/.ssh/git_signing_key"
     chmod 600 "$user_home/.ssh/git_signing_key"
     chown "$user:$user" "$user_home/.ssh/git_signing_key"
+
+    # Start the SSH agent and add the key
+    su - "$user" -c "eval \$(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
+
+    # Configure Git to use the signing key
     su - "$user" -c "git config --global user.signingkey $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global commit.gpgsign true"
 }
