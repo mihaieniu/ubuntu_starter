@@ -7,14 +7,15 @@ NEW_USER="$2"
 NEW_PASS="$3"
 TAILSCALE_KEY="$4"
 SAMBA_NETWORK="$5"
+GIT_PRIVATE_KEY="$6"
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root"
     exit 1
 fi
 
-if [ -z "$ROOT_SSH_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ]; then
-    echo "Usage: sudo $0 \"<root_ssh_key>\" <new_username> <new_password> <tailscale_key> <samba_network>"
+if [ -z "$ROOT_SSH_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ] || [ -z "$GIT_PRIVATE_KEY" ]; then
+    echo "Usage: sudo $0 \"<root_ssh_key>\" <new_username> <new_password> <tailscale_key> <samba_network> <git_private_key>"
     exit 1
 fi
 
@@ -43,61 +44,23 @@ add_ssh_key() {
     chown -R "$user:$user" "$user_home/.ssh"
 }
 
-zshrc_template() {
-    local _home="$1"
-    local _plugins="$2"
-    cat <<EOM
-export ZSH="\${_home}/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=($_plugins)
-zsh_user_at_host(){
-    echo -n "\$(whoami)@\$(hostname)"
-}
-zsh_ip_address(){
-    hostname -I | awk '{print $1}'
-}
-POWERLEVEL9K_CUSTOM_USER_AT_HOST="zsh_user_at_host"
-POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(custom_user_at_host dir)
-POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
-source \$ZSH/oh-my-zsh.sh
-EOM
-}
-
-powerline10k_config() {
-    cat <<EOM
-POWERLEVEL9K_SHORTEN_STRATEGY="truncate_to_last"
-EOM
-}
-
-setup_ohmyzsh() {
-    local user="$1"
-    local user_home="$2"
-    local ssh_key="$3"
-    rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
-    su - "$user" -c "sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\" --unattended"
-    local zsh_custom="$user_home/.oh-my-zsh/custom"
-    su - "$user" -c "
-    git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting
-    git clone https://github.com/zdharma-continuum/fast-syntax-highlighting $zsh_custom/plugins/fast-syntax-highlighting
-    git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete
-    git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k
-    "
-    zshrc_template "$user_home" "$PLUGINS" > "$user_home/.zshrc"
-    powerline10k_config >> "$user_home/.zshrc"
-    chown "$user:$user" "$user_home/.zshrc"
-    chsh -s "$(which zsh)" "$user"
-    add_ssh_key "$user_home" "$ssh_key" "$user"
+configure_git_signing() {
+    local user_home="$1"
+    local private_key="$2"
+    local user="$3"
+    mkdir -p "$user_home/.ssh"
+    echo "$private_key" > "$user_home/.ssh/git_signing_key"
+    chmod 600 "$user_home/.ssh/git_signing_key"
+    chown "$user:$user" "$user_home/.ssh/git_signing_key"
+    su - "$user" -c "git config --global user.signingkey $user_home/.ssh/git_signing_key"
+    su - "$user" -c "git config --global commit.gpgsign true"
 }
 
 setup_tailscale() {
     log "Setting up Tailscale..."
     curl -fsSL https://tailscale.com/install.sh | sh || { echo "Tailscale installation failed"; exit 1; }
     systemctl enable --now tailscaled
-    if ! grep -q "tailscale up --auth-key=$TAILSCALE_KEY" /etc/crontab; then
-        echo "@reboot root tailscale up --auth-key=$TAILSCALE_KEY --accept-routes --ssh" >> /etc/crontab
-    fi
+    systemctl is-active --quiet tailscaled || { echo "Tailscale service is not running"; exit 1; }
 }
 
 create_new_user() {
@@ -116,11 +79,13 @@ setup_docker() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    [ -d /mnt ] && sudo chown -R "$NEW_USER:$NEW_USER" /mnt
+    docker run hello-world || { echo "Docker is not configured correctly"; exit 1; }
 }
 
 setup_samba() {
     log "Setting up Samba..."
+    mkdir -p /mnt
+    chown -R "$NEW_USER:$NEW_USER" /mnt
     cd /etc/samba
     mv smb.conf smb.conf.old || true
     cat <<EOF > smb.conf
@@ -167,11 +132,41 @@ EOF
     ufw status
 }
 
+setup_ohmyzsh() {
+    local user="$1"
+    local user_home="$2"
+    local zsh_custom="$user_home/.oh-my-zsh/custom"
+
+    # Remove existing configurations
+    rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
+
+    # Install Oh My Zsh
+    su - "$user" -c "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash --unattended"
+
+    # Clone plugins and themes
+    su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions" || { echo "Failed to clone zsh-autosuggestions"; exit 1; }
+    su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting" || { echo "Failed to clone zsh-syntax-highlighting"; exit 1; }
+    su - "$user" -c "git clone https://github.com/zdharma-continuum/fast-syntax-highlighting $zsh_custom/plugins/fast-syntax-highlighting" || { echo "Failed to clone fast-syntax-highlighting"; exit 1; }
+    su - "$user" -c "git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete" || { echo "Failed to clone zsh-autocomplete"; exit 1; }
+    su - "$user" -c "git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k" || { echo "Failed to clone powerlevel10k"; exit 1; }
+
+    # Generate .zshrc and configure Powerlevel10k
+    su - "$user" -c "zshrc_template $user_home \"$PLUGINS\" > $user_home/.zshrc" || { echo "Failed to generate .zshrc"; exit 1; }
+    su - "$user" -c "powerline10k_config >> $user_home/.zshrc" || { echo "Failed to configure Powerlevel10k"; exit 1; }
+
+    # Set ownership and default shell
+    chown -R "$user:$user" "$user_home/.oh-my-zsh" "$user_home/.zshrc"
+    chsh -s "$(which zsh)" "$user"
+}
+
 # Run everything
 install_dependencies
-setup_ohmyzsh root /root "$ROOT_SSH_KEY"
 create_new_user
-setup_ohmyzsh "$NEW_USER" "/home/$NEW_USER" "$ROOT_SSH_KEY"
 setup_tailscale
 setup_docker
 setup_samba
+add_ssh_key "/root" "$ROOT_SSH_KEY" root
+add_ssh_key "/home/$NEW_USER" "$ROOT_SSH_KEY" "$NEW_USER"
+configure_git_signing "/home/$NEW_USER" "$GIT_PRIVATE_KEY" "$NEW_USER"
+setup_ohmyzsh root /root
+setup_ohmyzsh "$NEW_USER" "/home/$NEW_USER"
