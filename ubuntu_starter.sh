@@ -6,16 +6,26 @@ ROOT_SSH_KEY="$1"
 NEW_USER="$2"
 NEW_PASS="$3"
 TAILSCALE_KEY="$4"
+SAMBA_NETWORK="$5"
 
-if [ -z "$ROOT_SSH_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$TAILSCALE_KEY"]; then
-    echo "Usage: sudo $0 "<root_ssh_key>" <new_username> <new_password>"
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
     exit 1
 fi
 
-THEME="default"
+if [ -z "$ROOT_SSH_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ]; then
+    echo "Usage: sudo $0 \"<root_ssh_key>\" <new_username> <new_password> <tailscale_key> <samba_network>"
+    exit 1
+fi
+
 PLUGINS="git sudo zsh-autosuggestions zsh-syntax-highlighting fast-syntax-highlighting zsh-autocomplete"
 
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+}
+
 install_dependencies() {
+    log "Installing dependencies..."
     apt-get update
     apt-get install -y git curl zsh sudo ca-certificates gnupg lsb-release samba ufw wsdd
 }
@@ -26,17 +36,18 @@ add_ssh_key() {
     local user="$3"
     mkdir -p "$user_home/.ssh"
     chmod 700 "$user_home/.ssh"
-    echo "$ssh_key" >> "$user_home/.ssh/authorized_keys"
+    if ! grep -qF "$ssh_key" "$user_home/.ssh/authorized_keys" 2>/dev/null; then
+        echo "$ssh_key" >> "$user_home/.ssh/authorized_keys"
+    fi
     chmod 600 "$user_home/.ssh/authorized_keys"
     chown -R "$user:$user" "$user_home/.ssh"
 }
 
 zshrc_template() {
     local _home="$1"
-    local _theme="$2"
-    local _plugins="$3"
+    local _plugins="$2"
     cat <<EOM
-export ZSH="\$_home/.oh-my-zsh"
+export ZSH="\${_home}/.oh-my-zsh"
 ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=($_plugins)
 zsh_user_at_host(){
@@ -64,7 +75,7 @@ setup_ohmyzsh() {
     local user_home="$2"
     local ssh_key="$3"
     rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
-    su - "$user" -c "sh -c "\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended"
+    su - "$user" -c "sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\" --unattended"
     local zsh_custom="$user_home/.oh-my-zsh/custom"
     su - "$user" -c "
     git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions
@@ -73,7 +84,7 @@ setup_ohmyzsh() {
     git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete
     git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k
     "
-    zshrc_template "$user_home" "$THEME" "$PLUGINS" > "$user_home/.zshrc"
+    zshrc_template "$user_home" "$PLUGINS" > "$user_home/.zshrc"
     powerline10k_config >> "$user_home/.zshrc"
     chown "$user:$user" "$user_home/.zshrc"
     chsh -s "$(which zsh)" "$user"
@@ -81,31 +92,37 @@ setup_ohmyzsh() {
 }
 
 setup_tailscale() {
-    curl -fsSL https://tailscale.com/install.sh | sh
+    log "Setting up Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh || { echo "Tailscale installation failed"; exit 1; }
     systemctl enable --now tailscaled
-    echo "@reboot root tailscale up --auth-key=$TAILSCALE_KEY --accept-routes --ssh" >> /etc/crontab
+    if ! grep -q "tailscale up --auth-key=$TAILSCALE_KEY" /etc/crontab; then
+        echo "@reboot root tailscale up --auth-key=$TAILSCALE_KEY --accept-routes --ssh" >> /etc/crontab
+    fi
 }
 
 create_new_user() {
+    log "Creating new user $NEW_USER..."
     useradd -m -s "$(which zsh)" -G sudo "$NEW_USER"
     echo "$NEW_USER:$NEW_PASS" | chpasswd
 }
 
 setup_docker() {
+    log "Setting up Docker..."
     apt-get update
     apt-get install -y ca-certificates curl
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
-    echo       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu       $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable"       | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    chown -R "$NEW_USER:$NEW_USER" /mnt || true
+    [ -d /mnt ] && chown -R "$NEW_USER:$NEW_USER" /mnt
     [ -d /data ] && chown -R "$NEW_USER:$NEW_USER" /data
     [ -d /docker ] && chown -R "$NEW_USER:$NEW_USER" /docker
 }
 
 setup_samba() {
+    log "Setting up Samba..."
     cd /etc/samba
     mv smb.conf smb.conf.old || true
     cat <<EOF > smb.conf
@@ -115,7 +132,7 @@ setup_samba() {
    security = user
    map to guest = Bad User
    name resolve order = bcast host
-   hosts allow = 192.168.100.0/24
+   hosts allow = $SAMBA_NETWORK
    hosts deny = 0.0.0.0/0
 
 [data]
@@ -147,6 +164,7 @@ EOF
     (echo "$NEW_PASS"; echo "$NEW_PASS") | smbpasswd -a "$NEW_USER"
     systemctl enable smbd nmbd
     systemctl restart smbd nmbd
+    ufw enable || true
     ufw allow Samba || true
     ufw status
 }
