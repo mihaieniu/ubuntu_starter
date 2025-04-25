@@ -144,7 +144,7 @@ setup_ohmyzsh() {
 
     # Install Oh My Zsh
     su - "$user" -c "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash -s --"
-    
+
     # Clone plugins and themes
     su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions" || { echo "Failed to clone zsh-autosuggestions"; exit 1; }
     su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting" || { echo "Failed to clone zsh-syntax-highlighting"; exit 1; }
@@ -152,9 +152,12 @@ setup_ohmyzsh() {
     su - "$user" -c "git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete" || { echo "Failed to clone zsh-autocomplete"; exit 1; }
     su - "$user" -c "git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k" || { echo "Failed to clone powerlevel10k"; exit 1; }
 
-    # Generate .zshrc and configure Powerlevel10k
-    su - "$user" -c "zshrc_template $user_home \"$PLUGINS\" > $user_home/.zshrc" || { echo "Failed to generate .zshrc"; exit 1; }
-    su - "$user" -c "powerline10k_config >> $user_home/.zshrc" || { echo "Failed to configure Powerlevel10k"; exit 1; }
+    # Generate .zshrc using the default template from Oh My Zsh
+    su - "$user" -c "cp $user_home/.oh-my-zsh/templates/zshrc.zsh-template $user_home/.zshrc"
+    su - "$user" -c "sed -i 's|^ZSH_THEME=.*|ZSH_THEME=\"powerlevel10k/powerlevel10k\"|' $user_home/.zshrc"
+
+    # Add plugins to .zshrc
+    su - "$user" -c "sed -i 's|^plugins=.*|plugins=($PLUGINS)|' $user_home/.zshrc"
 
     # Set ownership and default shell
     chown -R "$user:$user" "$user_home/.oh-my-zsh" "$user_home/.zshrc"
