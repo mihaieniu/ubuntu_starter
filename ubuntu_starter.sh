@@ -73,13 +73,19 @@ plugins=($PLUGINS)
 zsh_user_at_host(){
      echo -n "\$(whoami)@\$(hostname)"
  }
- zsh_ip_address(){
-     hostname -I | awk '{print $1}'
- }
- POWERLEVEL9K_CUSTOM_USER_AT_HOST="zsh_user_at_host"
- POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
- POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(custom_user_at_host dir vcs)
- POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
+zsh_ip_address(){
+    ip=\$(hostname -I | awk '{print \$1}')
+    if [ -z "\$ip" ]; then
+        echo "No IP"
+    else
+        echo "\$ip"
+    fi
+}
+POWERLEVEL9K_CUSTOM_USER_AT_HOST="zsh_user_at_host"
+POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(custom_user_at_host dir vcs)
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
+
 
 # Alias to start SSH agent and add Git signing key
 alias start-ssh-agent='eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key'
@@ -91,7 +97,7 @@ echo "      _   _| |__  _   _ _ __ | |_ _   _ "
 echo "     | | | | '_ \| | | | '_ \| __| | | |"
 echo "     | |_| | |_) | |_| | | | | |_| |_| |"
 echo "      \__,_|_.__/ \__,_|_| |_|\__|\__,_|"
-eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key
+eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key | 2> /dev/null
 
 source \$ZSH/oh-my-zsh.sh
 EOM
