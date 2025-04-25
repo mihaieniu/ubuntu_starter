@@ -91,7 +91,7 @@ EOM
     echo "$private_key" > "$user_home/.ssh/git_signing_key"
     chmod 600 "$user_home/.ssh/git_signing_key"
     chown "$user:$user" "$user_home/.ssh/git_signing_key"
-    su - "$user" -c "eval \$(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
+    su - "$user" -c "eval $(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global user.signingkey $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global commit.gpgsign true"
 }
