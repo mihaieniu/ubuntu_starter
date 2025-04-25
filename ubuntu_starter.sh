@@ -70,19 +70,28 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 plugins=($PLUGINS)
 
 # Custom left and right prompts
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user hostname dir vcs)
-POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
-
-# Function to display the IP address in the right prompt
-zsh_ip_address() {
-    echo -n \$(hostname -I | awk '{print \$1}')
-}
-POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
-POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
+zsh_user_at_host(){
+     echo -n "\$(whoami)@\$(hostname)"
+ }
+ zsh_ip_address(){
+     hostname -I | awk '{print $1}'
+ }
+ POWERLEVEL9K_CUSTOM_USER_AT_HOST="zsh_user_at_host"
+ POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
+ POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(custom_user_at_host dir vcs)
+ POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
 
 # Alias to start SSH agent and add Git signing key
 alias start-ssh-agent='eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key'
 alias la='ls -alh --color=auto'
+
+# Print "ubuntu" to terminal screen on startup
+echo "            _                 _         "
+echo "      _   _| |__  _   _ _ __ | |_ _   _ "
+echo "     | | | | '_ \| | | | '_ \| __| | | |"
+echo "     | |_| | |_) | |_| | | | | |_| |_| |"
+echo "      \__,_|_.__/ \__,_|_| |_|\__|\__,_|"
+eval \$(ssh-agent) && ssh-add ~/.ssh/git_signing_key
 
 source \$ZSH/oh-my-zsh.sh
 EOM
