@@ -84,7 +84,9 @@ setup_docker() {
 
 setup_samba() {
     log "Setting up Samba..."
-    mkdir -p /mnt
+    mkdir -p /mnt/data /mnt/docker
+    rm -rf /mnt/data/lost+found
+    rm -rf /mnt/docker/lost+found
     chown -R "$NEW_USER:$NEW_USER" /mnt
     cd /etc/samba
     mv smb.conf smb.conf.old || true
