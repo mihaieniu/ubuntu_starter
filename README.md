@@ -11,23 +11,23 @@ sudo apt update && sudo apt upgrade -y && sudo apt install -y curl
 ## Usage
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "<root_ssh_key>" "<new_user>" "<new_password>" "<tailscale_auth_key>" "<samba_network>" "<git_private_key>"
+curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "<root_ssh_key>" "<tailscale_auth_key>" "<samba_network>" "<git_private_key>" "<new_user>" "<new_password>"
 ```
 
 Example:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "ssh-ed25519 key" "user" "passwd" "tskey-auth-key" "192.168.100.0/24" "PRIVATE_KEY_CONTENT"
+curl -fsSL https://raw.githubusercontent.com/mihaieniu/ubuntu_starter/refs/heads/main/ubuntu_starter.sh | bash -s -- "ssh-ed25519 key" "tskey-auth-key" "192.168.100.0/24" "PRIVATE_KEY_CONTENT" "user" "passwd"
 ```
 
 ## Arguments
 
 1. `<root_ssh_key>`: The SSH public key to be added to the root user.
-2. `<new_user>`: The username for the new user to be created.
-3. `<new_password>`: The password for the new user.
-4. `<tailscale_auth_key>`: The Tailscale authentication key.
-5. `<samba_network>`: The IP range allowed to access Samba shares using /CIDR.
-6. `<git_private_key>`: The private key used for Git signing configuration.
+2. `<tailscale_auth_key>`: The Tailscale authentication key.
+3. `<samba_network>`: The IP range allowed to access Samba shares using /CIDR.
+4. `<git_private_key>`: The private key used for Git signing configuration.
+5. `<new_user>`: The username for the new user to be created.
+6. `<new_password>`: The password for the new user.
 
 ## Features
 

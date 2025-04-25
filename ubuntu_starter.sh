@@ -3,19 +3,19 @@ set -e
 
 # Args
 ROOT_SSH_KEY="$1"
-NEW_USER="$2"
-NEW_PASS="$3"
-TAILSCALE_KEY="$4"
-SAMBA_NETWORK="$5"
-GIT_PRIVATE_KEY="$6"
+TAILSCALE_KEY="$2"
+SAMBA_NETWORK="$3"
+GIT_PRIVATE_KEY="$4"
+NEW_USER="$5"
+NEW_PASS="$6"
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root"
     exit 1
 fi
 
-if [ -z "$ROOT_SSH_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ] || [ -z "$GIT_PRIVATE_KEY" ]; then
-    echo "Usage: sudo $0 \"<root_ssh_key>\" <new_username> <new_password> <tailscale_key> <samba_network> <git_private_key>"
+if [ -z "$ROOT_SSH_KEY" ] || [ -z "$TAILSCALE_KEY" ] || [ -z "$SAMBA_NETWORK" ] || [ -z "$GIT_PRIVATE_KEY" ] || [ -z "$NEW_USER" ] || [ -z "$NEW_PASS" ]; then
+    echo "Usage: sudo $0 \"<root_ssh_key>\" <tailscale_key> <samba_network> <git_private_key> <new_username> <new_password>"
     exit 1
 fi
 
@@ -31,10 +31,13 @@ install_dependencies() {
     apt-get install -y git curl zsh sudo ca-certificates gnupg lsb-release samba ufw wsdd
 }
 
-add_ssh_key() {
-    local user_home="$1"
-    local ssh_key="$2"
-    local user="$3"
+setup_user_environment() {
+    local user="$1"
+    local user_home="$2"
+    local ssh_key="$3"
+    local private_key="$4"
+
+    # Add SSH key
     mkdir -p "$user_home/.ssh"
     chmod 700 "$user_home/.ssh"
     if ! grep -qF "$ssh_key" "$user_home/.ssh/authorized_keys" 2>/dev/null; then
@@ -42,25 +45,53 @@ add_ssh_key() {
     fi
     chmod 600 "$user_home/.ssh/authorized_keys"
     chown -R "$user:$user" "$user_home/.ssh"
+
+    # Install Oh My Zsh
+    rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
+    su - "$user" -c "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash -s --"
+    local zsh_custom="$user_home/.oh-my-zsh/custom"
+    su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions" || { echo "Failed to clone zsh-autosuggestions"; exit 1; }
+    su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting" || { echo "Failed to clone zsh-syntax-highlighting"; exit 1; }
+    su - "$user" -c "git clone https://github.com/zdharma-continuum/fast-syntax-highlighting $zsh_custom/plugins/fast-syntax-highlighting" || { echo "Failed to clone fast-syntax-highlighting"; exit 1; }
+    su - "$user" -c "git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete" || { echo "Failed to clone zsh-autocomplete"; exit 1; }
+    su - "$user" -c "git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k" || { echo "Failed to clone powerlevel10k"; exit 1; }
+
+    # Generate .zshrc with custom configuration
+    cat <<EOM > "$user_home/.zshrc"
+export LANG='en_US.UTF-8'
+export LANGUAGE='en_US:en'
+export LC_ALL='en_US.UTF-8'
+[ -z "\$TERM" ] && export TERM=xterm
+
+# Zsh/Oh-my-Zsh Configuration
+export ZSH="$user_home/.oh-my-zsh"
+
+ZSH_THEME="powerlevel10k/powerlevel10k"
+plugins=($PLUGINS)
+
+# Custom left and right prompts
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
+POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
+
+# Function to display the IP address in the right prompt
+zsh_ip_address() {
+    echo -n \$(hostname -I | awk '{print \$1}')
 }
+POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
+POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
 
-configure_git_signing() {
-    local user_home="$1"
-    local private_key="$2"
-    local user="$3"
+source \$ZSH/oh-my-zsh.sh
+EOM
 
-    # Create .ssh directory if it doesn't exist
-    mkdir -p "$user_home/.ssh"
+    chown -R "$user:$user" "$user_home/.oh-my-zsh" "$user_home/.zshrc"
+    chsh -s "$(which zsh)" "$user"
 
-    # Save the private key
+    # Configure Git signing
     echo "$private_key" > "$user_home/.ssh/git_signing_key"
     chmod 600 "$user_home/.ssh/git_signing_key"
     chown "$user:$user" "$user_home/.ssh/git_signing_key"
-
-    # Start the SSH agent and add the key
     su - "$user" -c "eval \$(ssh-agent) && ssh-add $user_home/.ssh/git_signing_key"
-
-    # Configure Git to use the signing key
     su - "$user" -c "git config --global user.signingkey $user_home/.ssh/git_signing_key"
     su - "$user" -c "git config --global commit.gpgsign true"
 }
@@ -143,64 +174,11 @@ EOF
     ufw status
 }
 
-setup_ohmyzsh() {
-    local user="$1"
-    local user_home="$2"
-    local zsh_custom="$user_home/.oh-my-zsh/custom"
-
-    # Remove existing configurations
-    rm -rf "$user_home/.oh-my-zsh" "$user_home/.zshrc"
-
-    # Install Oh My Zsh
-    su - "$user" -c "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | bash -s --"
-
-    # Clone plugins and themes
-    su - "$user" -c "git clone https://github.com/zsh-users/zsh-autosuggestions $zsh_custom/plugins/zsh-autosuggestions" || { echo "Failed to clone zsh-autosuggestions"; exit 1; }
-    su - "$user" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting $zsh_custom/plugins/zsh-syntax-highlighting" || { echo "Failed to clone zsh-syntax-highlighting"; exit 1; }
-    su - "$user" -c "git clone https://github.com/zdharma-continuum/fast-syntax-highlighting $zsh_custom/plugins/fast-syntax-highlighting" || { echo "Failed to clone fast-syntax-highlighting"; exit 1; }
-    su - "$user" -c "git clone https://github.com/marlonrichert/zsh-autocomplete $zsh_custom/plugins/zsh-autocomplete" || { echo "Failed to clone zsh-autocomplete"; exit 1; }
-    su - "$user" -c "git clone https://github.com/romkatv/powerlevel10k $zsh_custom/themes/powerlevel10k" || { echo "Failed to clone powerlevel10k"; exit 1; }
-
-    # Generate .zshrc with custom configuration
-    cat <<EOM > "$user_home/.zshrc"
-export LANG='en_US.UTF-8'
-export LANGUAGE='en_US:en'
-export LC_ALL='en_US.UTF-8'
-[ -z "\$TERM" ] && export TERM=xterm
-
-# Zsh/Oh-my-Zsh Configuration
-export ZSH="$user_home/.oh-my-zsh"
-
-ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=($PLUGINS)
-
-# Custom left and right prompts
-POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(user dir vcs)
-POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(ip)
-
-# Function to display the IP address in the right prompt
-zsh_ip_address() {
-    echo -n \$(hostname -I | awk '{print \$1}')
-}
-POWERLEVEL9K_CUSTOM_IP="zsh_ip_address"
-POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(custom_ip)
-
-source \$ZSH/oh-my-zsh.sh
-EOM
-
-    # Set ownership and default shell
-    chown -R "$user:$user" "$user_home/.oh-my-zsh" "$user_home/.zshrc"
-    chsh -s "$(which zsh)" "$user"
-}
-
 # Run everything
 install_dependencies
 create_new_user
 setup_tailscale
 setup_docker
 setup_samba
-add_ssh_key "/root" "$ROOT_SSH_KEY" root
-add_ssh_key "/home/$NEW_USER" "$ROOT_SSH_KEY" "$NEW_USER"
-configure_git_signing "/home/$NEW_USER" "$GIT_PRIVATE_KEY" "$NEW_USER"
-setup_ohmyzsh root /root
-setup_ohmyzsh "$NEW_USER" "/home/$NEW_USER"
+setup_user_environment root /root "$ROOT_SSH_KEY" "$GIT_PRIVATE_KEY"
+setup_user_environment "$NEW_USER" "/home/$NEW_USER" "$ROOT_SSH_KEY" "$GIT_PRIVATE_KEY"
