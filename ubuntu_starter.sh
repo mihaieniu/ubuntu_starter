@@ -116,9 +116,7 @@ setup_docker() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    [ -d /mnt ] && chown -R "$NEW_USER:$NEW_USER" /mnt
-    [ -d /data ] && chown -R "$NEW_USER:$NEW_USER" /data
-    [ -d /docker ] && chown -R "$NEW_USER:$NEW_USER" /docker
+    [ -d /mnt ] && sudo chown -R "$NEW_USER:$NEW_USER" /mnt
 }
 
 setup_samba() {
@@ -136,7 +134,7 @@ setup_samba() {
    hosts deny = 0.0.0.0/0
 
 [data]
-   path = /data
+   path = /mnt/data
    force user = $NEW_USER
    force group = $NEW_USER
    create mask = 0774
@@ -149,7 +147,7 @@ setup_samba() {
    guest ok = no
 
 [docker]
-   path = /docker
+   path = /mnt/docker
    force user = $NEW_USER
    force group = $NEW_USER
    create mask = 0774
