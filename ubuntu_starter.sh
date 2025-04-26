@@ -74,8 +74,18 @@ setup_docker() {
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+    # Add the new user to the Docker group
+    log "Adding $NEW_USER to the docker group..."
+    groupadd -f docker
+    usermod -aG docker "$NEW_USER"
+
+    # Restart Docker to apply group changes
+    log "Restarting Docker service..."
+    systemctl restart docker
+
     # Verify Docker installation
-    docker run hello-world || { echo "Docker is not configured correctly"; exit 1; }
+    log "Verifying Docker installation..."
+    su - "$NEW_USER" -c "docker run hello-world" || { echo "Docker is not configured correctly"; exit 1; }
 
     log "Docker setup completed successfully."
 }
@@ -219,7 +229,7 @@ EOF
 # Run everything
 install_dependencies
 create_new_user
-setup_tailscale
+# setup_tailscale
 setup_docker
 
 if [ "$SETUP_SAMBA" = "yes" ]; then
