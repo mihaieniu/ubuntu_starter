@@ -53,15 +53,31 @@ setup_tailscale() {
 
 setup_docker() {
     log "Setting up Docker..."
+
+    # Remove any old Docker versions
+    apt-get remove -y docker docker-engine docker.io containerd runc || true
+
+    # Install required dependencies
     apt-get update
-    apt-get install -y ca-certificates curl
+    apt-get install -y ca-certificates curl gnupg lsb-release
+
+    # Add Docker's official GPG key
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Add Docker's repository
+    UBUNTU_CODENAME=$(lsb_release -cs)
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $UBUNTU_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update package index and install Docker
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Verify Docker installation
     docker run hello-world || { echo "Docker is not configured correctly"; exit 1; }
+
+    log "Docker setup completed successfully."
 }
 
 setup_user_environment() {
