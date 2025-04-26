@@ -32,6 +32,12 @@ install_dependencies() {
     apt-get install -y git curl zsh sudo ca-certificates gnupg lsb-release samba ufw wsdd
 }
 
+create_new_user() {
+    log "Creating new user $NEW_USER..."
+    useradd -m -s "$(which zsh)" -G sudo "$NEW_USER"
+    echo "$NEW_USER:$NEW_PASS" | chpasswd
+}
+
 setup_tailscale() {
     log "Installing Tailscale..."
     curl -fsSL https://tailscale.com/install.sh | sh || { echo "Tailscale installation failed"; exit 1; }
@@ -43,6 +49,19 @@ setup_tailscale() {
     tailscale up --hostname="$(hostname)" --accept-routes --ssh --auth-key="$TAILSCALE_KEY" || { echo "Tailscale configuration failed"; exit 1; }
 
     log "Tailscale setup completed successfully."
+}
+
+setup_docker() {
+    log "Setting up Docker..."
+    apt-get update
+    apt-get install -y ca-certificates curl
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    docker run hello-world || { echo "Docker is not configured correctly"; exit 1; }
 }
 
 setup_user_environment() {
