@@ -1,0 +1,211 @@
+# Updated Compose file with Tailscale integration and static IPs for each service.
+
+networks:
+  servarrnetwork:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/24
+
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+      - WEBUI_PORT=8090
+      - TORRENTING_PORT=6881
+    volumes:
+      - /mnt/docker/qbittorrent:/config
+      - /mnt/data:/data
+    healthcheck:
+      test: ping -c 1 www.google.com || exit 1
+      interval: 60s
+      retries: 3
+      start_period: 20s
+      timeout: 10s
+    ports:
+      - 8090:8090
+      - 6881:6881
+      - 6881:6881/udp
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.3
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+    volumes:
+      - /mnt/docker/sonarr:/config
+      - /mnt/data:/data
+    ports:
+      - 8989:8989
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.4
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+    volumes:
+      - /mnt/docker/radarr:/config
+      - /mnt/data:/data
+    ports:
+      - 7878:7878
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.5
+
+  jellyseerr:
+    image: ghcr.io/fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      - LOG_LEVEL=debug
+      - TZ=Europe/Bucharest
+      - PORT=5055 #optional
+    ports:
+      - 5055:5055
+    volumes:
+      - /mnt/docker/jellyseerr:/app/config
+    restart: always
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.6
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+    volumes:
+      - /mnt/docker/bazarr:/config
+      - /mnt/data:/data
+    ports:
+      - 6767:6767
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.7
+
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+    volumes:
+      - /mnt/docker/jackett:/config
+      - /mnt/data:/data
+    ports:
+      - 9117:9117
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.8
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+      - JELLYFIN_PublishedServerUrl=http://10.0.0.100 #optional
+    volumes:
+      - /mnt/docker/jellyfin:/config
+      - /mnt/data:/data
+    # devices:
+    #   - /dev/dri:/dev/dri # Use for Intel QuickSync
+    ports:
+      - 8096:8096
+      - 7359:7359/udp # Service Discovery
+      - 1900:1900/udp # Client Discovery
+    restart: always
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.9
+
+  portainer-agent:
+    image: portainer/agent:2.16.2
+    container_name: portainer-agent
+    ports:
+      - 9001:9001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.10
+    restart: always
+  
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+      - VERSION=docker
+    volumes:
+      - /mnt/docker/plex:/config
+      - /mnt/data:/data
+    ports:
+      - 32400:32400
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.11
+    restart: always
+
+  darktable:
+    image: lscr.io/linuxserver/darktable:latest
+    container_name: darktable
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Bucharest
+      - CUSTOM_USER=mihai
+      - PASSWORD=Fashion2024!
+    volumes:
+      - /mnt/docker/darktable:/config
+      - /mnt/data/Photos:/photos
+    ports:
+      - 3000:3000 # Example port, adjust if needed
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.12
+    restart: always
+  
+  filebrowser:
+    image: filebrowser/filebrowser:s6
+    container_name: filebrowser
+    volumes:
+      - /data:/srv # Directory you want exposed to filebrowser.
+      - /docker/filebrowser/data:/data
+      - /docker/filebrowser/config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+    ports:
+      - 80:80
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.13
+    restart: unless-stopped
+
+volumes:
+  portainer_agent_data:
