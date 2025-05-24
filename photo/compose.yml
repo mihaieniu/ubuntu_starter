@@ -1,0 +1,96 @@
+#
+# WARNING: To install Immich, follow our guide: https://immich.app/docs/install/docker-compose
+#
+# Make sure to use the docker-compose.yml of the current release:
+#
+# https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
+#
+# The compose file on main may not be compatible with the latest release.
+
+name: immich
+
+services:
+  immich-server:
+    container_name: immich_server
+    image: ghcr.io/immich-app/immich-server:release
+    volumes:
+      - /mnt/data/PhotoNAS/uploads:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+      - /mnt/data/PhotoNAS/Lightroom:/mnt/media/Lightroom:ro
+      - /mnt/data/PhotoNAS/GooglePhotos:/mnt/media/GooglePhotos:ro
+      - /mnt/data/PhotoNAS/iCloudPhotos:/mnt/media/iCloudPhotos:ro
+    environment:
+      UPLOAD_LOCATION: /mnt/data/PhotoNAS/uploads
+      DB_PASSWORD: postgres
+      DB_USERNAME: postgres
+      DB_DATABASE_NAME: immich
+      DB_DATA_LOCATION: /mnt/data/appdata/immich/db
+    ports:
+      - '2283:2283'
+    depends_on:
+      - redis
+      - database
+    restart: always
+    healthcheck:
+      disable: false
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.20
+
+  immich-machine-learning:
+    container_name: immich_machine_learning
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    volumes:
+      - /mnt/docker/appdata/immich/model-cache:/cache
+    environment:
+      DB_PASSWORD: postgres
+      DB_USERNAME: postgres
+      DB_DATABASE_NAME: immich
+    restart: always
+    healthcheck:
+      disable: false
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.21
+
+  redis:
+    container_name: immich_redis
+    image: redis:6.2-alpine
+    restart: always
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.22
+
+  database:
+    container_name: immich_postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - /mnt/docker/appdata/immich/db:/var/lib/postgresql/data
+    restart: always
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.23
+
+  portainer-agent:
+    image: portainer/agent:2.16.2
+    container_name: portainer-agent
+    ports:
+      - 9001:9001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    restart: always
+    networks:
+      servarrnetwork:
+        ipv4_address: 172.18.0.24
+
+networks:
+  servarrnetwork:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/24
